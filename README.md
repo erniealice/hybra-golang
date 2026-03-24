@@ -1,12 +1,12 @@
 # hybra-golang
 
-**Cross-cutting application features for the Ryta OS monorepo.**
+**Cross-cutting application features for the Ichizen OS monorepo.**
 
 `hybra-golang` is a shared package that houses reusable application-level orchestration code — features that are needed by multiple domain packages but don't belong in the UI framework (`pyeza`) or any single domain.
 
 ## Why hybra exists
 
-The Ryta OS monorepo has a three-layer architecture:
+The Ichizen OS monorepo has a three-layer architecture:
 
 ```
   Domain Packages          centymo (commerce), entydad (identity), fycha (accounting)

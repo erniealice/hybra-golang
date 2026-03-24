@@ -18,6 +18,6 @@ require (
 	google.golang.org/protobuf v1.36.10 // indirect
 )
 
-replace github.com/erniealice/esqyma => ../esqyma-ryta
+replace github.com/erniealice/esqyma => ../esqyma
 
-replace github.com/erniealice/pyeza-golang => ../pyeza-golang-ryta
+replace github.com/erniealice/pyeza-golang => ../pyeza-golang
