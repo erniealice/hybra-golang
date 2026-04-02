@@ -5,3 +5,6 @@
 node_modules/
 playwright-report/
 test-results/
+
+# Prevent accidental nested clone
+hybra-golang/
