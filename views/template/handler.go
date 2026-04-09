@@ -423,9 +423,9 @@ func BuildTable(templates []TemplateData, cfg *Config) *types.TableConfig {
 func templateColumns(l Labels) []types.TableColumn {
 	return []types.TableColumn{
 		{Key: "name", Label: l.TemplateName, Sortable: true},
-		{Key: "type", Label: l.TemplateType, Sortable: true, Width: "120px"},
-		{Key: "purpose", Label: l.Purpose, Sortable: true, Width: "120px"},
-		{Key: "status", Label: l.DefaultBadge, Sortable: true, Width: "120px"},
+		{Key: "type", Label: l.TemplateType, Sortable: true, WidthClass: "col-2xl"},
+		{Key: "purpose", Label: l.Purpose, Sortable: true, WidthClass: "col-2xl"},
+		{Key: "status", Label: l.DefaultBadge, Sortable: true, WidthClass: "col-2xl"},
 	}
 }
 

@@ -244,8 +244,8 @@ func BuildTable(attachments []*attachmentpb.Attachment, cfg *Config, entityID st
 
 	columns := []types.TableColumn{
 		{Key: "name", Label: l.FileName, Sortable: true},
-		{Key: "content_type", Label: l.FileType, Sortable: true, Width: "120px"},
-		{Key: "file_size", Label: l.FileSize, Sortable: true, Width: "100px"},
+		{Key: "content_type", Label: l.FileType, Sortable: true, WidthClass: "col-2xl"},
+		{Key: "file_size", Label: l.FileSize, Sortable: true, WidthClass: "col-lg"},
 		{Key: "description", Label: l.Description, Sortable: false},
 	}
 
