@@ -43,7 +43,7 @@ type Config struct {
 	Labels       Labels
 	CommonLabels any
 	TableLabels  types.TableLabels
-	ActiveNav    string // "sales", "purchases"
+	ActiveNav    string // "revenue", "purchases"
 	PageIcon     string // "icon-file-text"
 
 	// Proto CRUD (injected from composition root)
