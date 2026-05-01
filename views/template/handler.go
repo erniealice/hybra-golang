@@ -422,10 +422,10 @@ func BuildTable(templates []TemplateData, cfg *Config) *types.TableConfig {
 
 func templateColumns(l Labels) []types.TableColumn {
 	return []types.TableColumn{
-		{Key: "name", Label: l.TemplateName, Sortable: true},
-		{Key: "type", Label: l.TemplateType, Sortable: true, WidthClass: "col-2xl"},
-		{Key: "purpose", Label: l.Purpose, Sortable: true, WidthClass: "col-2xl"},
-		{Key: "status", Label: l.DefaultBadge, Sortable: true, WidthClass: "col-2xl"},
+		{Key: "name", Label: l.TemplateName},
+		{Key: "type", Label: l.TemplateType, WidthClass: "col-2xl"},
+		{Key: "purpose", Label: l.Purpose, WidthClass: "col-2xl"},
+		{Key: "status", Label: l.DefaultBadge, WidthClass: "col-2xl"},
 	}
 }
 

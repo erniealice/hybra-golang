@@ -243,10 +243,10 @@ func BuildTable(attachments []*attachmentpb.Attachment, cfg *Config, entityID st
 	l := cfg.Labels
 
 	columns := []types.TableColumn{
-		{Key: "name", Label: l.FileName, Sortable: true},
-		{Key: "content_type", Label: l.FileType, Sortable: true, WidthClass: "col-2xl"},
-		{Key: "file_size", Label: l.FileSize, Sortable: true, WidthClass: "col-lg"},
-		{Key: "description", Label: l.Description, Sortable: false},
+		{Key: "name", Label: l.FileName},
+		{Key: "content_type", Label: l.FileType, WidthClass: "col-2xl"},
+		{Key: "file_size", Label: l.FileSize, WidthClass: "col-lg"},
+		{Key: "description", Label: l.Description, NoSort: true},
 	}
 
 	rows := []types.TableRow{}
