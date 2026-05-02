@@ -1,0 +1,13 @@
+{{/* Full page — for direct access / non-HTMX */}}
+{{define "integration-dashboard"}}
+{{template "app-shell" .}}
+{{end}}
+
+{{/* Content-only partial — for HTMX navigation */}}
+{{define "integration-dashboard-content"}}
+<div class="page-content"
+     data-page-css="/assets/css/hybra/hybra-integration-dashboard.css?v={{.CacheVersion}}"
+     data-testid="dashboard-integration">
+    {{template "dashboard" .Dashboard}}
+</div>
+{{end}}
