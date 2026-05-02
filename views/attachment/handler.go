@@ -11,6 +11,8 @@ import (
 	"github.com/erniealice/pyeza-golang/route"
 	"github.com/erniealice/pyeza-golang/types"
 	"github.com/erniealice/pyeza-golang/view"
+
+	"github.com/erniealice/hybra-golang/views/attachment/form"
 )
 
 // DefaultMaxUploadBytes is the fallback when Config.MaxUploadBytes is 0 (10 MB).
@@ -24,7 +26,7 @@ type Config struct {
 	UploadURL      string // POST form action URL pattern (may contain {id})
 	DeleteURL      string // POST delete action URL pattern (may contain {id})
 	RedirectURL    string // page to redirect to after action
-	Labels         Labels
+	Labels         form.Labels
 	CommonLabels   any
 	TableLabels    types.TableLabels
 
@@ -40,40 +42,10 @@ type Config struct {
 	DeleteAttachment func(ctx context.Context, req *attachmentpb.DeleteAttachmentRequest) (*attachmentpb.DeleteAttachmentResponse, error)
 }
 
-// Labels holds UI text for the attachment feature.
-type Labels struct {
-	TabLabel     string // "Attachments"
-	UploadTitle  string // "Upload Attachment"
-	FileName     string // "File Name"
-	FileInput    string // "Select File"
-	Description  string // "Description"
-	FileType     string // "Type"
-	FileSize     string // "Size"
-	UploadedAt   string // "Uploaded"
-	UploadedBy   string // "Uploaded By"
-	EmptyTitle   string // "No attachments"
-	EmptyMessage string // "Upload files to attach them to this record."
-	Delete       string // "Delete"
-	Upload       string // "Upload"
-}
-
 // DefaultLabels returns English defaults for quick prototyping.
-func DefaultLabels() Labels {
-	return Labels{
-		TabLabel:     "Attachments",
-		UploadTitle:  "Upload Attachment",
-		FileName:     "File Name",
-		FileInput:    "Select File",
-		Description:  "Description (optional)",
-		FileType:     "Type",
-		FileSize:     "Size",
-		UploadedAt:   "Uploaded",
-		UploadedBy:   "Uploaded By",
-		EmptyTitle:   "No attachments",
-		EmptyMessage: "Upload files to attach them to this record.",
-		Delete:       "Delete",
-		Upload:       "Upload",
-	}
+// Deprecated: Use form.DefaultLabels() instead.
+func DefaultLabels() form.Labels {
+	return form.DefaultLabels()
 }
 
 func (c *Config) maxBytes() int64 {
@@ -90,15 +62,6 @@ func (c *Config) newID() string {
 	return fmt.Sprintf("att-%d", 0)
 }
 
-// UploadFormData is the template data for the upload drawer form.
-type UploadFormData struct {
-	FormAction   string
-	Labels       Labels
-	CommonLabels any
-	MaxFileSize  int64
-	EntityType   string
-	EntityID     string
-}
 
 // NewUploadAction creates a dual-purpose handler: GET = drawer form, POST = upload file.
 func NewUploadAction(cfg *Config) view.View {
@@ -106,7 +69,7 @@ func NewUploadAction(cfg *Config) view.View {
 		entityID := viewCtx.Request.PathValue("id")
 
 		if viewCtx.Request.Method == http.MethodGet {
-			return view.OK("attachment-upload-drawer-form", &UploadFormData{
+			return view.OK("attachment-upload-drawer-form", &form.UploadFormData{
 				FormAction:   route.ResolveURL(cfg.UploadURL, "id", entityID),
 				Labels:       cfg.Labels,
 				CommonLabels: nil,

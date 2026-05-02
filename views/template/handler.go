@@ -16,6 +16,8 @@ import (
 	"github.com/erniealice/pyeza-golang/view"
 
 	documenttemplatepb "github.com/erniealice/esqyma/pkg/schema/v1/domain/document/template"
+
+	"github.com/erniealice/hybra-golang/views/template/form"
 )
 
 // DefaultMaxUploadBytes is the fallback when Config.MaxUploadBytes is 0 (10 MB).
@@ -40,7 +42,7 @@ type Config struct {
 	SetDefaultURL string
 
 	// UI
-	Labels       Labels
+	Labels       form.Labels
 	CommonLabels any
 	TableLabels  types.TableLabels
 	ActiveNav    string // "revenue", "purchases"
@@ -56,67 +58,10 @@ type Config struct {
 	UploadFile func(ctx context.Context, bucket, key string, content []byte, contentType string) error
 }
 
-// Labels holds UI text for the template management feature.
-type Labels struct {
-	PageTitle      string `json:"pageTitle"`
-	Caption        string `json:"caption"`
-	UploadTemplate string `json:"uploadTemplate"`
-	TemplateName   string `json:"templateName"`
-	TemplateType   string `json:"templateType"`
-	Purpose        string `json:"purpose"`
-	SetDefault     string `json:"setDefault"`
-	Delete         string `json:"delete"`
-	DefaultBadge   string `json:"defaultBadge"`
-	EmptyTitle     string `json:"emptyTitle"`
-	EmptyMessage   string `json:"emptyMessage"`
-	UploadSuccess  string `json:"uploadSuccess"`
-	DeleteConfirm  string `json:"deleteConfirm"`
-}
-
 // DefaultLabels returns English defaults for quick prototyping.
-func DefaultLabels() Labels {
-	return Labels{
-		PageTitle:      "Document Templates",
-		Caption:        "Manage document templates for generating reports and documents.",
-		UploadTemplate: "Upload Template",
-		TemplateName:   "Template Name",
-		TemplateType:   "Type",
-		Purpose:        "Purpose",
-		SetDefault:     "Set Default",
-		Delete:         "Delete",
-		DefaultBadge:   "Default",
-		EmptyTitle:     "No templates",
-		EmptyMessage:   "Upload document templates to get started.",
-		UploadSuccess:  "Template uploaded successfully.",
-		DeleteConfirm:  "Are you sure you want to delete this template?",
-	}
-}
-
-// TemplateData holds display-friendly fields for a single document template.
-type TemplateData struct {
-	ID              string
-	Name            string
-	TemplateType    string
-	DocumentPurpose string
-	OriginalFile    string
-	FileSizeBytes   int64
-	IsDefault       bool
-	SetDefaultURL   string
-}
-
-// PageData holds the data for the template list page.
-type PageData struct {
-	types.PageData
-	ContentTemplate string
-	Table           *types.TableConfig
-}
-
-// UploadFormData is the template data for the upload drawer form.
-type UploadFormData struct {
-	FormAction   string
-	Labels       Labels
-	CommonLabels any
-	AcceptTypes  string // e.g. ".docx" — for the file input accept attribute
+// Deprecated: Use form.DefaultLabels() instead.
+func DefaultLabels() form.Labels {
+	return form.DefaultLabels()
 }
 
 func (c *Config) maxBytes() int64 {
@@ -171,7 +116,7 @@ func NewListView(cfg *Config) view.View {
 		}
 		types.ApplyTableSettings(tableConfig)
 
-		pageData := &PageData{
+		pageData := &form.PageData{
 			PageData: types.PageData{
 				CacheVersion:   viewCtx.CacheVersion,
 				Title:          l.PageTitle,
@@ -194,7 +139,7 @@ func NewListView(cfg *Config) view.View {
 func NewUploadAction(cfg *Config) view.View {
 	return view.ViewFunc(func(ctx context.Context, viewCtx *view.ViewContext) view.ViewResult {
 		if viewCtx.Request.Method == http.MethodGet {
-			return view.OK("template-upload-drawer-form", &UploadFormData{
+			return view.OK("template-upload-drawer-form", &form.UploadFormData{
 				FormAction:   cfg.UploadURL,
 				Labels:       cfg.Labels,
 				CommonLabels: cfg.CommonLabels,
@@ -401,7 +346,7 @@ func NewSetDefaultAction(cfg *Config) view.View {
 }
 
 // BuildTable creates a TableConfig for displaying document templates.
-func BuildTable(templates []TemplateData, cfg *Config) *types.TableConfig {
+func BuildTable(templates []form.TemplateData, cfg *Config) *types.TableConfig {
 	l := cfg.Labels
 
 	columns := templateColumns(l)
@@ -420,7 +365,7 @@ func BuildTable(templates []TemplateData, cfg *Config) *types.TableConfig {
 	}
 }
 
-func templateColumns(l Labels) []types.TableColumn {
+func templateColumns(l form.Labels) []types.TableColumn {
 	return []types.TableColumn{
 		{Key: "name", Label: l.TemplateName},
 		{Key: "type", Label: l.TemplateType, WidthClass: "col-2xl"},
@@ -429,7 +374,7 @@ func templateColumns(l Labels) []types.TableColumn {
 	}
 }
 
-func buildTemplateRows(templates []TemplateData, l Labels, cfg *Config) []types.TableRow {
+func buildTemplateRows(templates []form.TemplateData, l form.Labels, cfg *Config) []types.TableRow {
 	rows := []types.TableRow{}
 	for _, t := range templates {
 		actions := []types.TableAction{}
@@ -481,7 +426,7 @@ func buildTemplateRows(templates []TemplateData, l Labels, cfg *Config) []types.
 }
 
 // loadTemplateList loads all active document templates for the configured purpose.
-func loadTemplateList(ctx context.Context, cfg *Config) []TemplateData {
+func loadTemplateList(ctx context.Context, cfg *Config) []form.TemplateData {
 	if cfg.ListDocumentTemplates == nil {
 		return nil
 	}
@@ -492,7 +437,7 @@ func loadTemplateList(ctx context.Context, cfg *Config) []TemplateData {
 		return nil
 	}
 
-	var templates []TemplateData
+	var templates []form.TemplateData
 	for _, t := range resp.GetData() {
 		if !t.GetActive() {
 			continue
@@ -500,7 +445,7 @@ func loadTemplateList(ctx context.Context, cfg *Config) []TemplateData {
 		if t.GetDocumentPurpose() != cfg.DocumentPurpose {
 			continue
 		}
-		templates = append(templates, TemplateData{
+		templates = append(templates, form.TemplateData{
 			ID:              t.GetId(),
 			Name:            t.GetName(),
 			TemplateType:    t.GetTemplateType(),
