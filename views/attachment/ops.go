@@ -17,8 +17,10 @@ import (
 // Views without attachments (e.g., job_activity) should NOT embed this.
 type AttachmentOps struct {
 	UploadFile       func(ctx context.Context, bucket, key string, content []byte, contentType string) error
+	DownloadFile     func(ctx context.Context, bucket, key string) ([]byte, error)
 	ListAttachments  func(ctx context.Context, moduleKey, foreignKey string) (*attachmentpb.ListAttachmentsResponse, error)
 	CreateAttachment func(ctx context.Context, req *attachmentpb.CreateAttachmentRequest) (*attachmentpb.CreateAttachmentResponse, error)
+	ReadAttachment   func(ctx context.Context, req *attachmentpb.ReadAttachmentRequest) (*attachmentpb.ReadAttachmentResponse, error)
 	DeleteAttachment func(ctx context.Context, req *attachmentpb.DeleteAttachmentRequest) (*attachmentpb.DeleteAttachmentResponse, error)
 	NewAttachmentID  func() string
 }

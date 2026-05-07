@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 
 	attachmentpb "github.com/erniealice/esqyma/pkg/schema/v1/domain/document/attachment"
 	"github.com/erniealice/pyeza-golang/route"
@@ -18,27 +19,39 @@ import (
 // DefaultMaxUploadBytes is the fallback when Config.MaxUploadBytes is 0 (10 MB).
 const DefaultMaxUploadBytes int64 = 10 << 20
 
+// urlPlaceholderRe matches `{name}` placeholders in URL patterns.
+var urlPlaceholderRe = regexp.MustCompile(`\{(\w+)\}`)
+
 // Config parameterizes the generic attachment handlers for a specific entity.
 type Config struct {
 	EntityType     string // e.g. "product", "client", "asset"
 	BucketName     string // storage bucket (default: "attachments")
 	MaxUploadBytes int64  // 0 = use DefaultMaxUploadBytes
-	UploadURL      string // POST form action URL pattern (may contain {id})
-	DeleteURL      string // POST delete action URL pattern (may contain {id})
+	UploadURL      string // POST form action URL pattern (may contain {id} and other placeholders)
+	DeleteURL      string // POST delete action URL pattern (may contain {id} and other placeholders)
+	DownloadURL    string // GET preview/download URL pattern. Empty = preview action hidden.
 	RedirectURL    string // page to redirect to after action
 	Labels         form.Labels
 	CommonLabels   any
 	TableLabels    types.TableLabels
 
+	// PrimaryIDPathParam names the URL placeholder whose value identifies the
+	// attached entity in storage (used as foreign_key + storage path segment).
+	// Default: "id". For nested mounts: variant uses "vid", stock-item uses "iid".
+	// Must match the foreign_key passed to ListAttachments by the caller.
+	PrimaryIDPathParam string
+
 	// NewID generates a unique identifier for new attachments.
 	NewID func() string
 
-	// Storage operation (injected from composition root)
-	UploadFile func(ctx context.Context, bucket, key string, content []byte, contentType string) error
+	// Storage operations (injected from composition root)
+	UploadFile   func(ctx context.Context, bucket, key string, content []byte, contentType string) error
+	DownloadFile func(ctx context.Context, bucket, key string) ([]byte, error)
 
 	// Data operations (backed by protobuf use cases)
 	ListAttachments  func(ctx context.Context, moduleKey, foreignKey string) (*attachmentpb.ListAttachmentsResponse, error)
 	CreateAttachment func(ctx context.Context, req *attachmentpb.CreateAttachmentRequest) (*attachmentpb.CreateAttachmentResponse, error)
+	ReadAttachment   func(ctx context.Context, req *attachmentpb.ReadAttachmentRequest) (*attachmentpb.ReadAttachmentResponse, error)
 	DeleteAttachment func(ctx context.Context, req *attachmentpb.DeleteAttachmentRequest) (*attachmentpb.DeleteAttachmentResponse, error)
 }
 
@@ -62,15 +75,34 @@ func (c *Config) newID() string {
 	return fmt.Sprintf("att-%d", 0)
 }
 
+func (c *Config) primaryIDParam() string {
+	if c.PrimaryIDPathParam != "" {
+		return c.PrimaryIDPathParam
+	}
+	return "id"
+}
+
+// resolveURLPairs reads every `{name}` placeholder in urlPattern and pairs it
+// with the request's PathValue, so URLs with multiple placeholders (e.g. variant
+// `/{id}/variant/{vid}/...`) resolve correctly when handed to route.ResolveURL.
+func resolveURLPairs(req *http.Request, urlPattern string) []string {
+	matches := urlPlaceholderRe.FindAllStringSubmatch(urlPattern, -1)
+	pairs := make([]string, 0, len(matches)*2)
+	for _, m := range matches {
+		pairs = append(pairs, m[1], req.PathValue(m[1]))
+	}
+	return pairs
+}
 
 // NewUploadAction creates a dual-purpose handler: GET = drawer form, POST = upload file.
 func NewUploadAction(cfg *Config) view.View {
 	return view.ViewFunc(func(ctx context.Context, viewCtx *view.ViewContext) view.ViewResult {
-		entityID := viewCtx.Request.PathValue("id")
+		entityID := viewCtx.Request.PathValue(cfg.primaryIDParam())
+		uploadPairs := resolveURLPairs(viewCtx.Request, cfg.UploadURL)
 
 		if viewCtx.Request.Method == http.MethodGet {
 			return view.OK("attachment-upload-drawer-form", &form.UploadFormData{
-				FormAction:   route.ResolveURL(cfg.UploadURL, "id", entityID),
+				FormAction:   route.ResolveURL(cfg.UploadURL, uploadPairs...),
 				Labels:       cfg.Labels,
 				CommonLabels: nil,
 				MaxFileSize:  cfg.maxBytes(),
@@ -173,7 +205,13 @@ func NewDeleteAction(cfg *Config) view.View {
 			return htmxError("attachment delete not configured")
 		}
 
-		attachmentID := viewCtx.Request.FormValue("attachment_id")
+		// pyeza's table-actions.js posts delete with the attachment ID in the
+		// `?id=` query string (the path's {id} is the parent entity). Fall
+		// back to the form body for non-pyeza callers that POST it there.
+		attachmentID := viewCtx.Request.URL.Query().Get("id")
+		if attachmentID == "" {
+			attachmentID = viewCtx.Request.FormValue("attachment_id")
+		}
 		if attachmentID == "" {
 			return htmxError("attachment ID is required")
 		}
@@ -201,20 +239,113 @@ func NewDeleteAction(cfg *Config) view.View {
 	})
 }
 
+// NewDownloadHandler returns an http.HandlerFunc that streams an attachment's
+// stored bytes inline (so browsers preview supported types in a new tab).
+//
+// The attachment ID is read from the `id` query parameter (set by pyeza's
+// table-actions.js when a `download` action is clicked). The path's `{id}`
+// placeholder identifies the parent entity and is used only for permission
+// scoping by the surrounding route — not for the storage lookup.
+func NewDownloadHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if cfg.ReadAttachment == nil || cfg.DownloadFile == nil {
+			http.Error(w, "attachment download not configured", http.StatusServiceUnavailable)
+			return
+		}
+
+		attachmentID := r.URL.Query().Get("id")
+		if attachmentID == "" {
+			http.Error(w, "attachment id is required", http.StatusBadRequest)
+			return
+		}
+
+		readResp, err := cfg.ReadAttachment(r.Context(), &attachmentpb.ReadAttachmentRequest{
+			Data: &attachmentpb.Attachment{Id: attachmentID},
+		})
+		if err != nil {
+			log.Printf("attachment download: read %s failed: %v", attachmentID, err)
+			http.Error(w, "attachment not found", http.StatusNotFound)
+			return
+		}
+		if len(readResp.GetData()) == 0 {
+			http.Error(w, "attachment not found", http.StatusNotFound)
+			return
+		}
+		att := readResp.GetData()[0]
+
+		container := att.GetStorageContainer()
+		key := att.GetStorageKey()
+		if container == "" || key == "" {
+			log.Printf("attachment download: %s missing storage_container/storage_key", attachmentID)
+			http.Error(w, "attachment storage location missing", http.StatusInternalServerError)
+			return
+		}
+
+		content, err := cfg.DownloadFile(r.Context(), container, key)
+		if err != nil {
+			log.Printf("attachment download: storage fetch %s/%s failed: %v", container, key, err)
+			http.Error(w, "failed to fetch attachment", http.StatusInternalServerError)
+			return
+		}
+
+		contentType := att.GetContentType()
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, att.GetName()))
+		_, _ = w.Write(content)
+	}
+}
+
 // BuildTable creates a TableConfig for displaying attachments.
-func BuildTable(attachments []*attachmentpb.Attachment, cfg *Config, entityID string) *types.TableConfig {
+//
+// entityID maps to the {id} placeholder in cfg.UploadURL and cfg.DeleteURL.
+// For URLs with additional placeholders (e.g. variant: {id}+{vid}, stock-item:
+// {id}+{vid}+{iid}), pass extra pairs via extraURLPairs ("vid", vidValue, ...).
+func BuildTable(attachments []*attachmentpb.Attachment, cfg *Config, entityID string, extraURLPairs ...string) *types.TableConfig {
 	l := cfg.Labels
+
+	urlPairs := append([]string{"id", entityID}, extraURLPairs...)
+
+	descriptionColumnLabel := l.DescriptionColumn
+	if descriptionColumnLabel == "" {
+		descriptionColumnLabel = l.Description
+	}
 
 	columns := []types.TableColumn{
 		{Key: "name", Label: l.FileName},
 		{Key: "content_type", Label: l.FileType, WidthClass: "col-2xl"},
 		{Key: "file_size", Label: l.FileSize, WidthClass: "col-lg"},
-		{Key: "description", Label: l.Description, NoSort: true},
+		{Key: "description", Label: descriptionColumnLabel, NoSort: true},
+	}
+
+	previewURL := ""
+	if cfg.DownloadURL != "" {
+		previewURL = route.ResolveURL(cfg.DownloadURL, urlPairs...)
 	}
 
 	rows := []types.TableRow{}
 	for _, a := range attachments {
 		sizeStr := formatFileSize(a.GetFileSizeBytes())
+
+		actions := []types.TableAction{}
+		if previewURL != "" {
+			actions = append(actions, types.TableAction{
+				Type:   "preview",
+				Label:  l.Preview,
+				Action: "download",
+				URL:    previewURL,
+			})
+		}
+		actions = append(actions, types.TableAction{
+			Type:     "delete",
+			Label:    l.Delete,
+			Action:   "delete",
+			URL:      route.ResolveURL(cfg.DeleteURL, urlPairs...),
+			ItemName: a.GetName(),
+		})
 
 		rows = append(rows, types.TableRow{
 			ID: a.GetId(),
@@ -224,30 +355,33 @@ func BuildTable(attachments []*attachmentpb.Attachment, cfg *Config, entityID st
 				{Type: "text", Value: sizeStr},
 				{Type: "text", Value: a.GetDescription()},
 			},
-			Actions: []types.TableAction{
-				{
-					Type:     "delete",
-					Label:    l.Delete,
-					Action:   "delete",
-					URL:      route.ResolveURL(cfg.DeleteURL, "id", entityID),
-					ItemName: a.GetName(),
-				},
-			},
+			Actions: actions,
 		})
 	}
 
 	types.ApplyColumnStyles(columns, rows)
 
-	return &types.TableConfig{
-		ID:      "attachments-table",
-		Columns: columns,
-		Rows:    rows,
-		Labels:  cfg.TableLabels,
+	table := &types.TableConfig{
+		ID:          "attachments-table",
+		Columns:     columns,
+		Rows:        rows,
+		ShowActions: true,
+		Labels:      cfg.TableLabels,
 		EmptyState: types.TableEmptyState{
 			Title:   l.EmptyTitle,
 			Message: l.EmptyMessage,
 		},
 	}
+
+	if cfg.UploadURL != "" {
+		table.PrimaryAction = &types.PrimaryAction{
+			Label:     l.Upload,
+			ActionURL: route.ResolveURL(cfg.UploadURL, urlPairs...),
+			TestID:    "attachment-upload",
+		}
+	}
+
+	return table
 }
 
 // formatFileSize converts bytes to a human-readable string.
