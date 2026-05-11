@@ -44,9 +44,9 @@ func DefaultIntegrationRoutes() IntegrationRoutes {
 // RouteMap returns a map[string]string for template URL resolution.
 func (r IntegrationRoutes) RouteMap() map[string]string {
 	return map[string]string{
-		"integration.dashboard":    r.DashboardURL,
-		"integration.connections":  r.ConnectionsURL,
-		"integration.scheduling":   r.SchedulingURL,
-		"integration.fulfillment":  r.FulfillmentURL,
+		"integration.dashboard":   r.DashboardURL,
+		"integration.connections": r.ConnectionsURL,
+		"integration.scheduling":  r.SchedulingURL,
+		"integration.fulfillment": r.FulfillmentURL,
 	}
 }

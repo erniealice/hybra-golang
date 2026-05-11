@@ -30,11 +30,11 @@ type IntegrationDashboardLabels struct {
 	Disconnected       string `json:"disconnected"`
 
 	// Widgets
-	SyncEventsTrend  string `json:"syncEventsTrend"`
-	ByProvider       string `json:"byProvider"`
-	RecentErrors     string `json:"recentErrors"`
-	NoRecentErrors   string `json:"noRecentErrors"`
-	NoProviders      string `json:"noProviders"`
+	SyncEventsTrend string `json:"syncEventsTrend"`
+	ByProvider      string `json:"byProvider"`
+	RecentErrors    string `json:"recentErrors"`
+	NoRecentErrors  string `json:"noRecentErrors"`
+	NoProviders     string `json:"noProviders"`
 
 	// Quick actions
 	QuickConnect          string `json:"quickConnect"`

@@ -35,6 +35,12 @@ type Config struct {
 	CommonLabels   any
 	TableLabels    types.TableLabels
 
+	// RefreshURL is the tab-action URL used by the table to reload the
+	// attachments tab after an upload or delete. It may contain {name}
+	// placeholders (e.g. {id}, {ppid}) which BuildTable resolves via urlPairs.
+	// Example: route.ResolveURL(deps.Routes.TabActionURL, "id", entityID, "tab", "attachments")
+	RefreshURL string
+
 	// PrimaryIDPathParam names the URL placeholder whose value identifies the
 	// attached entity in storage (used as foreign_key + storage path segment).
 	// Default: "id". For nested mounts: variant uses "vid", stock-item uses "iid".
@@ -183,16 +189,15 @@ func NewUploadAction(cfg *Config) view.View {
 			return htmxError("failed to save attachment")
 		}
 
-		redirectURL := cfg.RedirectURL
-		if redirectURL == "" {
-			redirectURL = viewCtx.Request.Header.Get("HX-Current-URL")
-		}
-
+		// Standard refresh pattern (matches centymo.HTMXSuccess). The drawer
+		// closes via formSuccess and the table refreshes via refreshTable.
+		// Previously returned HX-Redirect, which raced with the formSuccess
+		// JS handler and surfaced as a spurious error in the drawer despite
+		// a 200 OK and a saved row.
 		return view.ViewResult{
 			StatusCode: http.StatusOK,
 			Headers: map[string]string{
-				"HX-Trigger":  `{"formSuccess":true}`,
-				"HX-Redirect": redirectURL,
+				"HX-Trigger": `{"formSuccess":true,"refreshTable":"attachments-table"}`,
 			},
 		}
 	})
@@ -224,16 +229,10 @@ func NewDeleteAction(cfg *Config) view.View {
 			return htmxError("failed to delete attachment")
 		}
 
-		redirectURL := cfg.RedirectURL
-		if redirectURL == "" {
-			redirectURL = viewCtx.Request.Header.Get("HX-Current-URL")
-		}
-
 		return view.ViewResult{
 			StatusCode: http.StatusOK,
 			Headers: map[string]string{
-				"HX-Trigger":  `{"formSuccess":true}`,
-				"HX-Redirect": redirectURL,
+				"HX-Trigger": `{"formSuccess":true,"refreshTable":"attachments-table"}`,
 			},
 		}
 	})
@@ -361,12 +360,30 @@ func BuildTable(attachments []*attachmentpb.Attachment, cfg *Config, entityID st
 
 	types.ApplyColumnStyles(columns, rows)
 
+	refreshURL := ""
+	if cfg.RefreshURL != "" {
+		// Append "tab","attachments" so TabActionURL templates (which carry a
+		// {tab} placeholder) resolve to the correct tab without callers having
+		// to hard-code the slug.  Extra pairs that don't match any placeholder
+		// are silently ignored by route.ResolveURL.
+		refreshPairs := append(urlPairs, "tab", "attachments")
+		refreshURL = route.ResolveURL(cfg.RefreshURL, refreshPairs...)
+	}
+
 	table := &types.TableConfig{
-		ID:          "attachments-table",
-		Columns:     columns,
-		Rows:        rows,
-		ShowActions: true,
-		Labels:      cfg.TableLabels,
+		ID:                   "attachments-table",
+		RefreshURL:           refreshURL,
+		Columns:              columns,
+		Rows:                 rows,
+		ShowActions:          true,
+		ShowSearch:           true,
+		ShowSort:             true,
+		ShowColumns:          true,
+		ShowDensity:          true,
+		ShowEntries:          true,
+		DefaultSortColumn:    "name",
+		DefaultSortDirection: "asc",
+		Labels:               cfg.TableLabels,
 		EmptyState: types.TableEmptyState{
 			Title:   l.EmptyTitle,
 			Message: l.EmptyMessage,
@@ -380,6 +397,8 @@ func BuildTable(attachments []*attachmentpb.Attachment, cfg *Config, entityID st
 			TestID:    "attachment-upload",
 		}
 	}
+
+	types.ApplyTableSettings(table)
 
 	return table
 }

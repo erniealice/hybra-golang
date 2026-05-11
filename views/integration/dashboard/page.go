@@ -27,10 +27,10 @@ import (
 // projects per-provider stats into this shape so the view can render without
 // proto-coupling.
 type ProviderRow struct {
-	ID         string
-	Name       string
-	Status     string // "active" | "error" | "disconnected"
-	LastSync   string // human-readable timestamp ("2 minutes ago", "Yesterday")
+	ID           string
+	Name         string
+	Status       string // "active" | "error" | "disconnected"
+	LastSync     string // human-readable timestamp ("2 minutes ago", "Yesterday")
 	EventsLast7d int
 }
 
