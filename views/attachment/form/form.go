@@ -3,6 +3,7 @@ package form
 // UploadFormData is the template data for the upload drawer form.
 type UploadFormData struct {
 	FormAction   string
+	WorkspaceID   string // injected by C1: populated by ViewAdapter.injectWorkspaceID for action_workspace_guard
 	Labels       Labels
 	CommonLabels any
 	MaxFileSize  int64

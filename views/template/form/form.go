@@ -5,6 +5,7 @@ import "github.com/erniealice/pyeza-golang/types"
 // UploadFormData is the template data for the upload drawer form.
 type UploadFormData struct {
 	FormAction   string
+	WorkspaceID   string // injected by C1: populated by ViewAdapter.injectWorkspaceID for action_workspace_guard
 	Labels       Labels
 	CommonLabels any
 	AcceptTypes  string // e.g. ".docx" — for the file input accept attribute
