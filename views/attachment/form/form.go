@@ -3,12 +3,17 @@ package form
 // UploadFormData is the template data for the upload drawer form.
 type UploadFormData struct {
 	FormAction   string
-	WorkspaceID   string // injected by C1: populated by ViewAdapter.injectWorkspaceID for action_workspace_guard
+	WorkspaceID  string // injected by C1: populated by ViewAdapter.injectWorkspaceID for action_workspace_guard
 	Labels       Labels
 	CommonLabels any
 	MaxFileSize  int64
 	EntityType   string
 	EntityID     string
+	// AcceptTypes is the comma-joined list of allowed file extensions for this
+	// module's policy (e.g. ".pdf,.png,.jpg"). Advisory only — it drives the
+	// dropzone `accept=` attribute; the server enforces the policy by sniffing
+	// magic bytes. Empty when the module is default-denied.
+	AcceptTypes string
 }
 
 // Labels holds UI text for the attachment feature.

@@ -49,6 +49,13 @@ type Config struct {
 	// Must match the foreign_key passed to ListAttachments by the caller.
 	PrimaryIDPathParam string
 
+	// Policy optionally overrides the per-domain upload allow-list for THIS
+	// surface. When the zero value, the handler resolves the policy from the
+	// central DefaultRegistry by EntityType (module_key). An unconfigured
+	// EntityType with no override is DEFAULT-DENY: every upload is rejected.
+	// Q-ST-POLICY (LOCKED): central registry now, migrate into the use case in W4.
+	Policy *Policy
+
 	// NewID generates a unique identifier for new attachments.
 	NewID func() string
 
@@ -70,10 +77,27 @@ func DefaultLabels() form.Labels {
 }
 
 func (c *Config) maxBytes() int64 {
-	if c.MaxUploadBytes > 0 {
-		return c.MaxUploadBytes
+	// A per-domain Policy.MaxSize tightens (never loosens) the cap: take the
+	// smaller of the Config cap and the policy cap when both are set.
+	cap := c.MaxUploadBytes
+	if cap <= 0 {
+		cap = DefaultMaxUploadBytes
 	}
-	return DefaultMaxUploadBytes
+	if p := c.policy(); p.MaxSize > 0 && p.MaxSize < cap {
+		cap = p.MaxSize
+	}
+	return cap
+}
+
+// policy resolves the effective upload allow-list for this surface: an explicit
+// Config.Policy override wins; otherwise the central DefaultRegistry is consulted
+// by EntityType (module_key). An unknown EntityType with no override yields the
+// zero Policy, which denies every upload (DEFAULT-DENY).
+func (c *Config) policy() Policy {
+	if c.Policy != nil {
+		return *c.Policy
+	}
+	return PolicyFor(c.EntityType)
 }
 
 func (c *Config) newID() string {
@@ -116,6 +140,7 @@ func NewUploadAction(cfg *Config) view.View {
 				MaxFileSize:  cfg.maxBytes(),
 				EntityType:   cfg.EntityType,
 				EntityID:     entityID,
+				AcceptTypes:  cfg.policy().allowedExtensionsCSV(),
 			})
 		}
 
@@ -176,9 +201,34 @@ func NewUploadAction(cfg *Config) view.View {
 			return htmxError("failed to read file")
 		}
 
+		// ST-H3 (file-type enforcement): the allow/deny decision is made on the
+		// SERVER-DERIVED content type (magic-byte sniff of the first 512 bytes),
+		// never on the attacker-controlled Content-Type header. The client header
+		// is logged for forensics but is not trusted. An unconfigured module_key
+		// resolves to the zero Policy, which denies everything (DEFAULT-DENY).
+		policy := cfg.policy()
+		sniffedType := sniffContentType(content)
+		ext := extensionOf(header.Filename)
+		clientType := header.Header.Get("Content-Type")
+		if !policy.allows(sniffedType, ext) {
+			log.Printf(
+				"attachment upload rejected: module_key=%q filename=%q ext=%q sniffed=%q client_hdr=%q (policy denied)",
+				cfg.EntityType, header.Filename, ext, sniffedType, clientType,
+			)
+			if allowed := policy.allowedExtensionsCSV(); allowed != "" {
+				return htmxError(fmt.Sprintf("file type not allowed (accepted: %s)", allowed))
+			}
+			return htmxError("file uploads are not enabled for this record type")
+		}
+
 		newID := cfg.newID()
-		objectKey := fmt.Sprintf("attachments/%s/%s/%s-%s", cfg.EntityType, entityID, newID, header.Filename)
-		contentType := header.Header.Get("Content-Type")
+		// Sanitize the client filename before composing the storage key so a
+		// crafted name cannot inject into the object-key namespace on cloud
+		// providers (ST-M3). The DB `name` column keeps the original filename.
+		safeName := sanitizeObjectKeySegment(header.Filename)
+		objectKey := fmt.Sprintf("attachments/%s/%s/%s-%s", cfg.EntityType, entityID, newID, safeName)
+		// Store the server-derived content type, not the client header (ST-H3).
+		contentType := normalizeContentType(sniffedType)
 		if contentType == "" {
 			contentType = "application/octet-stream"
 		}
@@ -390,6 +440,32 @@ func sanitizeHeaderFilename(name string) string {
 }
 
 var headerFilenameUnsafeRe = regexp.MustCompile(`[\r\n"\\]`)
+
+// sanitizeObjectKeySegment makes a client filename safe to concatenate into a
+// storage object key on any provider (S3/GCS/Azure do not sanitize like the
+// local adapter does, ST-M3). It drops any path component, replaces path
+// separators / "..", control chars and other key-hostile bytes with "_", and
+// caps the length. The result never contains "/", "\", or ".." so it cannot
+// traverse the key namespace.
+func sanitizeObjectKeySegment(name string) string {
+	// Keep only the base name — discard any directory components a crafted
+	// "../../etc/passwd" filename might carry.
+	name = name[strings.LastIndexAny(name, `/\`)+1:]
+	name = objectKeyUnsafeRe.ReplaceAllString(name, "_")
+	name = strings.ReplaceAll(name, "..", "__")
+	name = strings.Trim(name, ". ")
+	if name == "" {
+		name = "file"
+	}
+	if len(name) > 128 {
+		name = name[:128]
+	}
+	return name
+}
+
+// objectKeyUnsafeRe matches bytes that must not appear in a storage object key
+// segment: path separators, control chars, and shell/URL-hostile characters.
+var objectKeyUnsafeRe = regexp.MustCompile(`[^\w.\-]+`)
 
 // BuildTable creates a TableConfig for displaying attachments.
 //
