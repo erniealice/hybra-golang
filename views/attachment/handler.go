@@ -1,6 +1,7 @@
 package attachment
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -59,9 +60,33 @@ type Config struct {
 	// NewID generates a unique identifier for new attachments.
 	NewID func() string
 
-	// Storage operations (injected from composition root)
+	// Storage operations (injected from composition root).
+	//
+	// UploadFile / DownloadFile are the ORIGINAL buffered ([]byte) closures. Their
+	// signatures are a PUBLIC contract consumed by ~37 downstream view/module Deps
+	// structs (centymo/entydad/fayna/fycha) that assign their own []byte closure
+	// straight through to this Config, so they MUST NOT change shape. Streaming is
+	// added ADDITIVELY below.
 	UploadFile   func(ctx context.Context, bucket, key string, content []byte, contentType string) error
 	DownloadFile func(ctx context.Context, bucket, key string) ([]byte, error)
+
+	// Q-ST-STREAM (LOCKED, B+C): OPTIONAL STREAM-tier closures, additive and
+	// nil-by-default. The composition root wires them to espyna's
+	// StreamingStorageProvider (UploadStream / DownloadStream + io.Copy) when the
+	// active adapter advertises it, leaving them nil otherwise. When set, the
+	// upload/download handlers PREFER them so hybra never buffers the whole object:
+	// upload hands UploadFileStream the (already MaxBytesReader-bounded) multipart
+	// file reader; download pumps the DownloadFileStream ReadCloser straight to the
+	// http.ResponseWriter via io.Copy. When nil, the handlers fall back to the
+	// buffered UploadFile/DownloadFile above so the contract stays non-breaking.
+	//
+	// UploadFileStream streams `body` (the bounded multipart file reader) of
+	// declared `size` bytes to (bucket,key). The caller does NOT pre-read body.
+	UploadFileStream func(ctx context.Context, bucket, key string, body io.Reader, size int64, contentType string) error
+	// DownloadFileStream opens (bucket,key) and returns the object body as an
+	// io.ReadCloser the CALLER MUST Close, alongside the byte length (-1 when the
+	// backend does not report it). The body is streamed, never fully buffered.
+	DownloadFileStream func(ctx context.Context, bucket, key string) (io.ReadCloser, int64, error)
 
 	// Data operations (backed by protobuf use cases)
 	ListAttachments  func(ctx context.Context, moduleKey, foreignKey string) (*attachmentpb.ListAttachmentsResponse, error)
@@ -191,14 +216,24 @@ func NewUploadAction(cfg *Config) view.View {
 			return htmxError(fmt.Sprintf("file too large: %d bytes (max %d)", header.Size, maxBytes))
 		}
 
-		content, err := io.ReadAll(fh)
-		if err != nil {
-			var maxErr *http.MaxBytesError
-			if errors.As(err, &maxErr) {
-				return htmxError(fmt.Sprintf("upload too large (max %d bytes)", maxBytes))
+		policy := cfg.policy()
+
+		// W4 (Q-ST-POLICY, MaxFileCount): reject when this parent record already
+		// holds the policy's cap of active attachments. This is the CHEAP UX
+		// rejection — counted from ListAttachments before any bytes are streamed.
+		// The espyna CreateAttachment use case re-counts and rejects before insert
+		// as the server-authoritative backstop for every caller; a benign TOCTOU
+		// gap between this read and that insert is closed there. MaxFileCount == 0
+		// means "no per-record cap" and skips the check. We fail OPEN on a list
+		// error (the espyna gate still enforces) rather than block uploads on a
+		// transient read failure.
+		if policy.MaxFileCount > 0 && cfg.ListAttachments != nil {
+			if listResp, lerr := cfg.ListAttachments(ctx, cfg.EntityType, entityID); lerr != nil {
+				log.Printf("attachment count precheck: list %s/%s failed (failing open, espyna backstops): %v", cfg.EntityType, entityID, lerr)
+			} else if n := countActive(listResp.GetData()); n >= policy.MaxFileCount {
+				log.Printf("attachment upload rejected: module_key=%q foreign_key=%q active=%d cap=%d (MaxFileCount)", cfg.EntityType, entityID, n, policy.MaxFileCount)
+				return htmxError(fmt.Sprintf("attachment limit reached (max %d files)", policy.MaxFileCount))
 			}
-			log.Printf("Failed to read uploaded file: %v", err)
-			return htmxError("failed to read file")
 		}
 
 		// ST-H3 (file-type enforcement): the allow/deny decision is made on the
@@ -206,8 +241,26 @@ func NewUploadAction(cfg *Config) view.View {
 		// never on the attacker-controlled Content-Type header. The client header
 		// is logged for forensics but is not trusted. An unconfigured module_key
 		// resolves to the zero Policy, which denies everything (DEFAULT-DENY).
-		policy := cfg.policy()
-		sniffedType := sniffContentType(content)
+		//
+		// Q-ST-STREAM: we read ONLY the sniff prefix (≤512 bytes) into memory, not
+		// the whole file. The full payload is reconstituted as a stream via
+		// io.MultiReader(prefix, rest-of-fh) and handed straight to UploadFile, so
+		// even a multi-hundred-MB upload never lands fully in RAM. fh is still
+		// wrapped by the MaxBytesReader applied above, so the byte ceiling keeps
+		// being enforced as the stream is consumed by the storage writer.
+		sniffPrefix := make([]byte, 512)
+		nPrefix, err := io.ReadFull(fh, sniffPrefix)
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				return htmxError(fmt.Sprintf("upload too large (max %d bytes)", maxBytes))
+			}
+			log.Printf("Failed to read upload prefix: %v", err)
+			return htmxError("failed to read file")
+		}
+		sniffPrefix = sniffPrefix[:nPrefix]
+
+		sniffedType := sniffContentType(sniffPrefix)
 		ext := extensionOf(header.Filename)
 		clientType := header.Header.Get("Content-Type")
 		if !policy.allows(sniffedType, ext) {
@@ -226,6 +279,13 @@ func NewUploadAction(cfg *Config) view.View {
 		// crafted name cannot inject into the object-key namespace on cloud
 		// providers (ST-M3). The DB `name` column keeps the original filename.
 		safeName := sanitizeObjectKeySegment(header.Filename)
+		// Q-ST-WSSCOPE (keyPrefix, LOCKED): this key is PROVISIONAL and workspace-
+		// AGNOSTIC by design. hybra cannot read the trusted workspace_id from ctx
+		// without taking an espyna module dependency (a layering violation), so the
+		// authoritative workspace-prefix rewrite (and the WorkspaceId stamp on the
+		// DB row) happens server-side in the espyna CreateAttachment use case from
+		// the same ctx workspace value — keeping the object name and the row's
+		// workspace_id derived from one server-trusted source at the create boundary.
 		objectKey := fmt.Sprintf("attachments/%s/%s/%s-%s", cfg.EntityType, entityID, newID, safeName)
 		// Store the server-derived content type, not the client header (ST-H3).
 		contentType := normalizeContentType(sniffedType)
@@ -238,10 +298,41 @@ func NewUploadAction(cfg *Config) view.View {
 			bucket = "attachments"
 		}
 
-		err = cfg.UploadFile(ctx, bucket, objectKey, content, contentType)
-		if err != nil {
-			log.Printf("Failed to upload attachment: %v", err)
-			return htmxError("failed to upload file")
+		// Reconstitute the full payload: the already-consumed sniff prefix is
+		// re-prepended to the remaining file reader so no bytes are lost.
+		body := io.MultiReader(bytes.NewReader(sniffPrefix), fh)
+
+		// PREFER the stream closure when the composition root opted in: it pumps
+		// `body` through io.Copy into the backend's native streaming writer
+		// (espyna StreamingStorageProvider), so even a multi-hundred-MB upload
+		// never lands fully in RAM (the bounded-memory win). When the stream
+		// closure is nil, FALL BACK to the original buffered []byte UploadFile:
+		// io.ReadAll the (still MaxBytesReader-bounded) body and hand it over —
+		// keeping the unchanged public contract working for every caller that has
+		// not opted into streaming.
+		if cfg.UploadFileStream != nil {
+			if err = cfg.UploadFileStream(ctx, bucket, objectKey, body, header.Size, contentType); err != nil {
+				var maxErr *http.MaxBytesError
+				if errors.As(err, &maxErr) {
+					return htmxError(fmt.Sprintf("upload too large (max %d bytes)", maxBytes))
+				}
+				log.Printf("Failed to upload attachment: %v", err)
+				return htmxError("failed to upload file")
+			}
+		} else {
+			content, rerr := io.ReadAll(body)
+			if rerr != nil {
+				var maxErr *http.MaxBytesError
+				if errors.As(rerr, &maxErr) {
+					return htmxError(fmt.Sprintf("upload too large (max %d bytes)", maxBytes))
+				}
+				log.Printf("Failed to read uploaded file: %v", rerr)
+				return htmxError("failed to read file")
+			}
+			if err = cfg.UploadFile(ctx, bucket, objectKey, content, contentType); err != nil {
+				log.Printf("Failed to upload attachment: %v", err)
+				return htmxError("failed to upload file")
+			}
 		}
 
 		att := &attachmentpb.Attachment{
@@ -380,12 +471,34 @@ func NewDownloadHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 
-		content, err := cfg.DownloadFile(r.Context(), container, key)
+		// PREFER the stream closure when the composition root opted in: open the
+		// object as a stream and pump it to the client via io.Copy so the body
+		// never lands fully in process memory (the bounded-memory win). When the
+		// stream closure is nil, FALL BACK to the original buffered []byte
+		// DownloadFile and wrap the bytes in a NopCloser so the downstream
+		// io.Copy path is identical. DownloadFileStream returns an io.ReadCloser
+		// the caller MUST Close (espyna DownloadStream / backend reader); size is
+		// -1 when the backend cannot report a length.
+		var (
+			rc   io.ReadCloser
+			size int64
+		)
+		if cfg.DownloadFileStream != nil {
+			rc, size, err = cfg.DownloadFileStream(r.Context(), container, key)
+		} else {
+			var content []byte
+			content, err = cfg.DownloadFile(r.Context(), container, key)
+			if err == nil {
+				rc = io.NopCloser(bytes.NewReader(content))
+				size = int64(len(content))
+			}
+		}
 		if err != nil {
 			log.Printf("attachment download: storage fetch %s/%s failed: %v", container, key, err)
 			http.Error(w, "failed to fetch attachment", http.StatusInternalServerError)
 			return
 		}
+		defer rc.Close()
 
 		contentType := att.GetContentType()
 		if contentType == "" {
@@ -403,9 +516,21 @@ func NewDownloadHandler(cfg *Config) http.HandlerFunc {
 			disposition = "inline"
 		}
 		w.Header().Set("Content-Type", contentType)
-		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
+		// Prefer the storage-reported length; fall back to the persisted metadata
+		// size so the browser still shows a progress bar when the backend can't
+		// report it inline. Omit the header entirely if neither is known (chunked).
+		if size < 0 {
+			size = att.GetFileSizeBytes()
+		}
+		if size > 0 {
+			w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
+		}
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="%s"`, disposition, sanitizeHeaderFilename(att.GetName())))
-		_, _ = w.Write(content)
+		if _, err := io.Copy(w, rc); err != nil {
+			// Headers (incl. 200) are already committed once Copy starts writing,
+			// so we can't send an error status — just log the truncated transfer.
+			log.Printf("attachment download: stream copy %s/%s failed: %v", container, key, err)
+		}
 	}
 }
 
@@ -588,6 +713,20 @@ func formatFileSize(bytes int64) string {
 	}
 	suffix := []string{"KB", "MB", "GB"}
 	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), suffix[exp])
+}
+
+// countActive returns the number of attachments that count against a parent
+// record's MaxFileCount cap: rows that are still Active (a soft-deleted row is
+// Active=false and must not consume a slot). Pairs with the espyna use-case
+// backstop, which counts the same active set authoritatively before insert.
+func countActive(atts []*attachmentpb.Attachment) int {
+	n := 0
+	for _, a := range atts {
+		if a.GetActive() {
+			n++
+		}
+	}
+	return n
 }
 
 // htmxError returns an HTMX-compatible error response.

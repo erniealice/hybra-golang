@@ -28,8 +28,14 @@ type Policy struct {
 	AllowedExtensions []string
 
 	// MaxFileCount is the maximum number of attachments allowed on a single
-	// parent record. 0 means "no per-record count limit enforced here" (the
-	// upload handler treats 0 as unlimited; tightening is a W4 use-case concern).
+	// parent record (counted over ACTIVE rows for a given (module_key,
+	// foreign_key)). 0 means "no per-record count limit" — the upload handler
+	// treats 0 as unlimited. A non-zero value is enforced in two places:
+	//   - the hybra upload handler counts existing active attachments via
+	//     ListAttachments and rejects at the cap (cheap UX rejection); and
+	//   - the espyna CreateAttachment use case re-counts and rejects before
+	//     insert (the server-authoritative backstop for EVERY caller — W4).
+	// The handler short-circuit is advisory; espyna is the durable gate.
 	MaxFileCount int
 
 	// MaxSize is the per-file byte ceiling for this domain. 0 falls back to the
@@ -145,8 +151,13 @@ func commonSafePolicy() Policy {
 	return Policy{
 		AllowedContentTypes: commonSafeContentTypes,
 		AllowedExtensions:   commonSafeExtensions,
-		MaxFileCount:        0, // TODO(owning-team): cap per module in W4
-		MaxSize:             0, // inherit Config cap
+		// W4 (Q-ST-POLICY): a sane per-record cap for document surfaces. The
+		// hybra upload handler enforces this against ListAttachments for a cheap
+		// UX rejection; the espyna CreateAttachment use case re-enforces it as
+		// the server-authoritative backstop for every caller. Owning teams may
+		// tighten further per module by overriding Config.Policy.
+		MaxFileCount: 20,
+		MaxSize:      0, // inherit Config cap
 	}
 }
 
@@ -155,8 +166,11 @@ func imagesOnlyPolicy() Policy {
 	return Policy{
 		AllowedContentTypes: imagesOnlyContentTypes,
 		AllowedExtensions:   imagesOnlyExtensions,
-		MaxFileCount:        0,
-		MaxSize:             0,
+		// W4 (Q-ST-POLICY): a tighter per-record cap for image surfaces (e.g.
+		// product photos) — enforced by the hybra handler (cheap UX rejection)
+		// and re-enforced authoritatively by the espyna CreateAttachment use case.
+		MaxFileCount: 10,
+		MaxSize:      0,
 	}
 }
 
