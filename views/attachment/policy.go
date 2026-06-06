@@ -244,6 +244,23 @@ var DefaultRegistry = map[string]Policy{
 
 	// --- cyta: scheduling (documents + images) ---
 	"event": commonSafePolicy(),
+
+	// --- communication: conversation post attachments (Plan-4, Q-MSG-4) ---
+	// Secure-messaging posts carry job briefs / CVs / supporting docs. Uses the
+	// conservative documents+images allow-list. NOTE (HARD, Q-MSG-4): the v1
+	// attachment FETCH route for module_key="conversation_post" MUST additionally
+	// enforce a per-module ownership RESOLVER (NOT generic middleware) that does
+	// the two-hop traversal attachment.foreign_key -> conversation_post ->
+	// conversation.client_id, fail-closed BEFORE any bytes on: wrong module_key,
+	// empty/unresolvable foreign_key, missing post/conversation, workspace
+	// mismatch, empty acting_as_client_id (client path), or client_id mismatch.
+	// document.Attachment has no client_id column, so this scope is route-enforced
+	// until the v2 direct client_id column lands. The conversation_post download
+	// route is NOT registered in this phase (composer attachments deferred — no
+	// icon-paperclip in the inventory), so this policy row only unblocks future
+	// uploads; the resolver must be wired alongside that download route when it
+	// ships (see apps/service-admin attachment fetch handler).
+	"conversation_post": commonSafePolicy(),
 }
 
 // PolicyFor returns the effective Policy for a given module_key. Resolution
