@@ -1,0 +1,74 @@
+{{/*
+Staff thread detail — thread header (status badge + assign/status buttons),
+scrollable post bubbles with 30s HTMX polling, and a simple composer.
+Layout CSS: entydad-conversation-thread.css (loaded via data-page-css).
+*/}}
+{{define "conversation-detail"}}
+{{template "app-shell" .}}
+{{end}}
+
+{{define "conversation-detail-content"}}
+<div class="page-content msg-thread-view"
+     data-page-css="/assets/css/entydad/entydad-conversation-thread.css?v={{.CacheVersion}}"
+     data-testid="conversation-thread-view">
+
+  <div class="msg-thread-header">
+    <a class="msg-thread-back" href="{{.Routes.ListURL}}" data-testid="conversation-back-btn">
+      {{template "icon-chevron-left" .}}<span>{{.Labels.Thread.BackToInbox}}</span>
+    </a>
+    <span class="msg-thread-subject">{{.Subject}}</span>
+    {{template "badge" (dict "Label" .StatusLabel "Variant" "status" "Status" .StatusVariant "ShowDot" false)}}
+    <span class="msg-thread-spacer"></span>
+    <span class="msg-thread-meta-inline">{{.Labels.Thread.Client}}: {{.ClientLabel}}</span>
+    <span class="msg-thread-meta-inline">{{.Labels.Thread.Assignee}}: {{.AssigneeLabel}}</span>
+    {{if .CanUpdate}}
+    <button type="button" class="btn btn-sm btn-secondary"
+            data-lf-action="sheet-open"
+            data-lf-sheet-title="{{.Labels.Actions.SetStatus}}"
+            hx-get="{{.Routes.SetStatusURL}}?id={{.ConversationID}}"
+            hx-target="#sheetContent" hx-swap="innerHTML"
+            data-testid="conversation-status-btn">{{.Labels.Actions.SetStatus}}</button>
+    <button type="button" class="btn btn-sm btn-primary"
+            data-lf-action="sheet-open"
+            data-lf-sheet-title="{{.Labels.Actions.Assign}}"
+            hx-get="{{.Routes.AssignURL}}?id={{.ConversationID}}"
+            hx-target="#sheetContent" hx-swap="innerHTML"
+            data-testid="conversation-assign-btn">{{.Labels.Actions.Assign}}</button>
+    {{end}}
+  </div>
+
+  <div class="msg-bubbles">
+    <div id="conversation-post-list"
+         hx-get="{{.Routes.PostsURL}}?id={{.ConversationID}}"
+         hx-trigger="every 30s"
+         hx-target="#conversation-post-list"
+         hx-swap="innerHTML"
+         data-testid="conversation-post-list">
+      {{template "conversation-posts-partial" .PostsData}}
+    </div>
+  </div>
+
+  <form class="msg-composer"
+        hx-post="{{.Routes.SendURL}}"
+        hx-swap="none"
+        data-hx-on="sheet-response"
+        data-testid="conversation-composer-form">
+    <input type="hidden" name="conversation_id" value="{{.ConversationID}}">
+    <input type="hidden" name="client_token" value="{{.ClientToken}}">
+    <textarea name="body" class="msg-composer-input"
+              placeholder="{{.PostLabels.Composer.Placeholder}}"
+              aria-label="{{.PostLabels.Composer.Placeholder}}"
+              data-testid="conversation-composer-input"></textarea>
+    <button type="submit" class="btn btn-primary msg-composer-send"
+            data-disable-on-submit="true"
+            data-testid="conversation-send-btn">{{.PostLabels.Composer.Send}}</button>
+  </form>
+
+  {{/* Mark-read fires once on load (piggybacked); no DOM swap. */}}
+  <span hx-post="{{.Routes.MarkReadURL}}"
+        hx-vals='{"conversation_id": "{{.ConversationID}}"}'
+        hx-trigger="load"
+        hx-swap="none"
+        aria-hidden="true"></span>
+</div>
+{{end}}

@@ -1,0 +1,95 @@
+{{/*
+Client portal "Messages" split-panel view (GATED surface).
+Left panel: thread list. Right panel: thread view + composer (or empty state).
+Reuses conversation-posts-partial for the bubbles.
+Layout CSS: entydad-conversation-list.css + entydad-conversation-thread.css.
+*/}}
+{{define "conversation-portal"}}
+{{template "app-shell" .}}
+{{end}}
+
+{{define "conversation-portal-content"}}
+<div class="page-content msg-layout{{if .HasActive}} msg-layout--thread-open{{end}}"
+     data-page-css="/assets/css/entydad/entydad-conversation-list.css?v={{.CacheVersion}}"
+     data-testid="conversation-portal">
+
+  {{/* ---- Left panel: thread list ---- */}}
+  <aside class="msg-list" aria-label="{{.Labels.List.Title}}">
+    <div class="msg-list-header">
+      <span>{{.Labels.List.Title}}</span>
+      <button type="button" class="btn btn-sm btn-primary"
+              data-lf-action="sheet-open"
+              data-lf-sheet-title="{{.Labels.Actions.NewConversation}}"
+              hx-get="{{.Routes.AddURL}}"
+              hx-target="#sheetContent" hx-swap="innerHTML"
+              data-testid="conversation-new-btn">{{.Labels.List.NewButton}}</button>
+    </div>
+    <div class="msg-list-body">
+      {{range .Threads}}
+      <div class="msg-thread{{if .Active}} msg-thread--active{{end}}{{if .IsUnread}} msg-thread--unread{{end}}"
+           hx-get="{{$.Routes.PortalListURL}}?id={{.ID}}"
+           hx-target="#main-content"
+           hx-push-url="true"
+           data-testid="conversation-row-{{.ID}}">
+        <div class="msg-thread-title">{{.Subject}}</div>
+        <div class="msg-thread-meta">
+          <span class="msg-thread-time">{{.Time}}</span>
+          <span class="msg-unread" aria-hidden="true"></span>
+        </div>
+      </div>
+      {{else}}
+      <div class="msg-thread-empty">{{$.Labels.List.EmptyMessage}}</div>
+      {{end}}
+    </div>
+  </aside>
+
+  {{/* ---- Right panel: thread view ---- */}}
+  <section class="msg-thread-view" id="msg-thread-view" data-testid="conversation-thread-view">
+    {{if .HasActive}}
+    <div class="msg-thread-header">
+      <span class="msg-thread-subject">{{.Subject}}</span>
+      {{template "badge" (dict "Label" .StatusLabel "Variant" "status" "ShowDot" false)}}
+    </div>
+
+    <div class="msg-bubbles">
+      <div id="conversation-post-list"
+           hx-get="{{.Routes.PortalPostsURL}}?id={{.ActiveID}}"
+           hx-trigger="every 30s"
+           hx-target="#conversation-post-list"
+           hx-swap="innerHTML"
+           data-testid="conversation-post-list">
+        {{template "conversation-posts-partial" .PostsData}}
+      </div>
+    </div>
+
+    <form class="msg-composer"
+          hx-post="{{.Routes.SendURL}}"
+          hx-swap="none"
+          data-hx-on="sheet-response"
+          data-testid="conversation-composer-form">
+      <input type="hidden" name="conversation_id" value="{{.ActiveID}}">
+      <input type="hidden" name="client_token" value="{{.ClientToken}}">
+      <textarea name="body" class="msg-composer-input"
+                placeholder="{{.PostLabels.Composer.Placeholder}}"
+                aria-label="{{.PostLabels.Composer.Placeholder}}"
+                data-testid="conversation-composer-input"></textarea>
+      <button type="submit" class="btn btn-primary msg-composer-send"
+              data-disable-on-submit="true"
+              data-testid="conversation-send-btn">{{.PostLabels.Composer.Send}}</button>
+    </form>
+
+    <span hx-post="{{.Routes.MarkReadURL}}"
+          hx-vals='{"conversation_id": "{{.ActiveID}}"}'
+          hx-trigger="load"
+          hx-swap="none"
+          aria-hidden="true"></span>
+    {{else}}
+    <div class="msg-empty-state" data-testid="conversation-thread-empty">
+      <div class="msg-empty-state-icon">{{template "icon-message-square" .}}</div>
+      <div class="msg-empty-state-title">{{.Labels.Thread.EmptyTitle}}</div>
+      <div class="msg-empty-state-subtitle">{{.Labels.Thread.EmptySubtitle}}</div>
+    </div>
+    {{end}}
+  </section>
+</div>
+{{end}}

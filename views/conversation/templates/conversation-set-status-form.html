@@ -1,0 +1,34 @@
+{{/*
+Set-status drawer (staff only). Renders the current status and a radio group of
+the ALLOWED transition targets only. Submits to SetConversationStatus.
+Data: form.Data (ID, CurrentStatusLabel, AllowedTransitions []StatusOption).
+*/}}
+{{define "conversation-set-status-form"}}
+<form hx-post="{{.FormAction}}" hx-swap="none" data-hx-on="sheet-response"
+      data-testid="conversation-set-status-form">
+  {{actionForm .FormAction .WorkspaceID}}
+  <input type="hidden" name="id" value="{{.ID}}">
+
+  <div class="sheet-body">
+    <div class="form-row single">
+      <p class="form-static-value">
+        {{.Labels.CurrentStatusLabel}}: <strong>{{.CurrentStatusLabel}}</strong>
+      </p>
+    </div>
+    <div class="form-row single">
+      <fieldset class="form-radio-group">
+        <legend class="form-label">{{.Labels.NewStatusLabel}}</legend>
+        {{range .AllowedTransitions}}
+        <label class="form-radio">
+          <input type="radio" name="status" value="{{.Value}}"
+                 data-testid="conversation-status-option-{{.Value}}">
+          <span>{{.Label}}</span>
+        </label>
+        {{end}}
+      </fieldset>
+    </div>
+  </div>
+
+  {{template "sheet-form-footer" (dict "CommonLabels" .CommonLabels "ShowCancel" true "IsEdit" true)}}
+</form>
+{{end}}

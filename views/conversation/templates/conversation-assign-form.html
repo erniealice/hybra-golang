@@ -1,0 +1,30 @@
+{{/*
+Assign-conversation drawer (staff only). Shows the current assignee and a staff
+autocomplete. Submits to AssignConversation.
+Data: form.Data (ID, CurrentAssignee, AssigneeSearchURL, Labels, CommonLabels).
+*/}}
+{{define "conversation-assign-form"}}
+<form hx-post="{{.FormAction}}" hx-swap="none" data-hx-on="sheet-response"
+      data-testid="conversation-assign-form">
+  {{actionForm .FormAction .WorkspaceID}}
+  <input type="hidden" name="id" value="{{.ID}}">
+
+  <div class="sheet-body">
+    <div class="form-row single">
+      <p class="form-static-value">
+        {{.Labels.CurrentAssigneeLabel}}: <strong>{{.CurrentAssignee}}</strong>
+      </p>
+    </div>
+    <div class="form-row single">
+      {{template "auto-complete" (dict
+        "ID" "assigned_to_user_id" "Name" "assigned_to_user_id"
+        "Label" .Labels.AssigneeLabel "Required" true
+        "SearchURL" .AssigneeSearchURL "Value" .AssigneeID
+        "SelectedLabel" .AssigneeLabel
+        "Placeholder" .Labels.AssigneePlaceholder)}}
+    </div>
+  </div>
+
+  {{template "sheet-form-footer" (dict "CommonLabels" .CommonLabels "ShowCancel" true "IsEdit" true)}}
+</form>
+{{end}}

@@ -1,0 +1,61 @@
+{{/*
+New-conversation drawer — loaded into #sheetContent via HTMX.
+Data: form.Data (FormAction, WorkspaceID, IsClientPrincipal, Client/Assignee
+search URLs, Labels, CommonLabels).
+
+Staff sees client + assignee autocompletes; a client principal sees neither
+(client_id is stamped from session). Submits hx-post (hx-swap="none") and
+closes via the sheet-response delegation.
+*/}}
+{{define "conversation-drawer-form"}}
+<form hx-post="{{.FormAction}}" hx-swap="none" data-hx-on="sheet-response"
+      data-testid="conversation-drawer-form">
+  {{actionForm .FormAction .WorkspaceID}}
+
+  <div class="sheet-body">
+    {{template "form-section" (dict "Title" .Labels.SectionTitle)}}
+
+    <div class="form-row single">
+      {{template "form-group" (dict
+        "Type" "text" "Name" "subject"
+        "Label" .Labels.SubjectLabel "Value" .Subject
+        "Placeholder" .Labels.SubjectPlaceholder "Required" true)}}
+    </div>
+
+    {{if not .IsClientPrincipal}}
+    <div class="form-row single">
+      {{template "auto-complete" (dict
+        "ID" "client_id" "Name" "client_id"
+        "Label" .Labels.ClientLabel "Required" true
+        "SearchURL" .ClientSearchURL "Value" .ClientID
+        "SelectedLabel" .ClientLabel
+        "Placeholder" .Labels.ClientPlaceholder)}}
+    </div>
+    <div class="form-row single">
+      {{template "auto-complete" (dict
+        "ID" "assigned_to_user_id" "Name" "assigned_to_user_id"
+        "Label" .Labels.AssigneeLabel "Required" false
+        "SearchURL" .AssigneeSearchURL "Value" .AssigneeID
+        "SelectedLabel" .AssigneeLabel
+        "Placeholder" .Labels.AssigneePlaceholder)}}
+    </div>
+    {{end}}
+
+    <div class="form-row single">
+      {{template "form-group" (dict
+        "Type" "text" "Name" "reference_entity_id"
+        "Label" .Labels.LinkLabel "Value" .ReferenceID
+        "Placeholder" .Labels.LinkPlaceholder)}}
+    </div>
+
+    <div class="form-row single">
+      {{template "form-group" (dict
+        "Type" "textarea" "Name" "body"
+        "Label" .Labels.MessageLabel
+        "Placeholder" .Labels.MessagePlaceholder "Required" true)}}
+    </div>
+  </div>
+
+  {{template "sheet-form-footer" (dict "CommonLabels" .CommonLabels "ShowCancel" true "IsEdit" .IsEdit)}}
+</form>
+{{end}}

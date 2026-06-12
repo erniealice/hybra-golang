@@ -1,0 +1,24 @@
+{{/*
+Shared message-bubble partial. Rendered inside #conversation-post-list by both
+the staff thread detail and the client portal thread view, and returned by the
+30s polling endpoint (hx-swap="innerHTML").
+
+Data: convshared.PostsPartialData { Posts []PostBubble, Labels ConversationPostLabels }
+
+Bubble direction (Q-MSG-13): IsMine → .msg.us (right); else .msg.them (left).
+Body is rendered TEXT-ONLY (never safeHTML) — XSS invariant.
+*/}}
+{{define "conversation-posts-partial"}}
+{{range .Posts}}
+  <div class="msg {{if .IsMine}}us{{else}}them{{end}}" data-post-id="{{.ID}}" data-testid="conversation-post-{{.ID}}">
+    <span class="msg-sender">{{.SenderLabel}}</span>
+    <div class="msg-body">{{.Body}}</div>
+    {{if .SentAt}}<span class="msg-timestamp">{{.SentAt}}</span>{{end}}
+  </div>
+{{else}}
+  <div class="msg-empty-state" data-testid="conversation-posts-empty">
+    <div class="msg-empty-state-icon">{{template "icon-message-square" .}}</div>
+    <div class="msg-empty-state-title">{{.Labels.Empty}}</div>
+  </div>
+{{end}}
+{{end}}

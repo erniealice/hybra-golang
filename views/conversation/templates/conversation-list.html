@@ -1,0 +1,28 @@
+{{/*
+Staff conversation inbox — thread-list table + filter chips.
+Full page (app-shell) + -content partial (HTMX navigation).
+Layout CSS: entydad-conversation-list.css (loaded via data-page-css).
+*/}}
+{{define "conversation-list"}}
+{{template "app-shell" .}}
+{{end}}
+
+{{define "conversation-list-content"}}
+<div class="page-content page-content--table msg-inbox"
+     data-page-css="/assets/css/entydad/entydad-conversation-list.css?v={{.CacheVersion}}"
+     data-testid="conversation-inbox">
+    <div class="msg-inbox-filters" role="tablist" aria-label="{{.Labels.List.Heading}}">
+        {{range .Filters}}
+        <a class="chip msg-inbox-filter{{if .Active}} msg-inbox-filter--active{{end}}"
+           href="{{.URL}}"
+           hx-get="{{.URL}}"
+           hx-target="#main-content"
+           hx-push-url="true"
+           role="tab"
+           aria-selected="{{if .Active}}true{{else}}false{{end}}"
+           data-testid="conversation-filter-{{.Key}}">{{.Label}}</a>
+        {{end}}
+    </div>
+    {{template "table-card" .Table}}
+</div>
+{{end}}

@@ -7,9 +7,13 @@
 // (manifest §6 TT). Derives the esqyma domain set + per-domain ENTITY set LIVE
 // from packages/esqyma/proto/v1/domain/ at test time.
 //
-// hybra is the §1a CROSS-CUTTING variant: it maps to FOUR esqyma domains by
-// concern (audit_trail, document, integration), so the "mirror ONE esqyma
-// domain" rule does NOT apply. crossCutting=true skips R1/R2/R2′/R3′/R5 and
+// hybra is the §1a CROSS-CUTTING variant: it maps to several esqyma domains by
+// concern (audit_trail, document, integration, communication/conversation), so
+// the "mirror ONE esqyma domain" rule does NOT apply. The communication/
+// conversation surface relocated here from entydad 2026-06-12 (view-package-
+// placement.md OCID, manifest thread TC): a polymorphic, multi-view secure-
+// messaging surface — a document.Attachment sibling, not OCID identity.
+// crossCutting=true skips R1/R2/R2′/R3′/R5 and
 // instead asserts every views/<x> is a chartered concern group and no
 // framework-leak file sits at root; R4 (no god-files) still applies.
 //
@@ -33,7 +37,7 @@ import (
 var crossCutting = true // hybra is the §1a cross-cutting carve-out.
 // legacyAllow — EMPTY = STRICT (hybra has zero migration debt).
 var legacyAllow = map[string]string{}
-var charterViews = []string{"attachment", "auditlog", "integration", "template"} // chartered concern groups
+var charterViews = []string{"attachment", "auditlog", "conversation", "integration", "template"} // chartered concern groups
 // subContexts: NAVIGATION-ONLY folders chartered directly under a single domain
 // (domain/<d>/<subcontext>/<entity>/). EMPTY for hybra — cross-cutting variant has
 // no domain/ subtree. Only entydad charters sub-contexts; this stays declared so
