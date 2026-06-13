@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	appcontext "github.com/erniealice/espyna-golang/appcontext"
+	"github.com/erniealice/espyna-golang/shared/identity"
 	conversationpb "github.com/erniealice/esqyma/pkg/schema/v1/domain/communication/conversation"
 	"github.com/erniealice/pyeza-golang/view"
 	"google.golang.org/protobuf/proto"
@@ -48,7 +48,7 @@ func NewAssignAction(deps *Deps) view.View {
 			}
 			return view.OK("conversation-assign-form", &convform.Data{
 				FormAction:        deps.Routes.AssignURL,
-				WorkspaceID:       appcontext.GetWorkspaceIDFromContext(ctx),
+				WorkspaceID:       identity.Must(ctx).WorkspaceID,
 				ID:                id,
 				IsEdit:            true,
 				AssigneeSearchURL: deps.AssigneeSearchURL,

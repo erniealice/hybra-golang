@@ -10,7 +10,7 @@ import (
 	"context"
 	"log"
 
-	appcontext "github.com/erniealice/espyna-golang/appcontext"
+	"github.com/erniealice/espyna-golang/shared/identity"
 	conversationpb "github.com/erniealice/esqyma/pkg/schema/v1/domain/communication/conversation"
 	pyeza "github.com/erniealice/pyeza-golang"
 	"github.com/erniealice/pyeza-golang/route"
@@ -131,8 +131,8 @@ func (deps *Deps) buildTable(ctx context.Context, statusKey string) (*types.Tabl
 	all := resp.GetData()
 
 	sessionUserID := ""
-	if uid, err := appcontext.RequireUserIDFromContext(ctx); err == nil {
-		sessionUserID = uid
+	if id, ok := identity.FromContext(ctx); ok {
+		sessionUserID = id.UserID
 	}
 
 	filtered := filterByStatusKey(all, statusKey, sessionUserID)

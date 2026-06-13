@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	appcontext "github.com/erniealice/espyna-golang/appcontext"
+	"github.com/erniealice/espyna-golang/shared/identity"
 	conversationpb "github.com/erniealice/esqyma/pkg/schema/v1/domain/communication/conversation"
 	"github.com/erniealice/pyeza-golang/view"
 
@@ -55,7 +55,7 @@ func NewSetStatusAction(deps *Deps) view.View {
 
 			return view.OK("conversation-set-status-form", &convform.Data{
 				FormAction:         deps.Routes.SetStatusURL,
-				WorkspaceID:        appcontext.GetWorkspaceIDFromContext(ctx),
+				WorkspaceID:        identity.Must(ctx).WorkspaceID,
 				ID:                 id,
 				IsEdit:             true,
 				CurrentStatus:      strconv.Itoa(int(current)),

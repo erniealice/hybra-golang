@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	appcontext "github.com/erniealice/espyna-golang/appcontext"
+	"github.com/erniealice/espyna-golang/shared/identity"
 	conversationpostpb "github.com/erniealice/esqyma/pkg/schema/v1/domain/communication/conversation_post"
 	"github.com/erniealice/pyeza-golang/view"
 
@@ -27,8 +27,8 @@ func NewPostsAction(deps *Deps) view.View {
 		}
 
 		viewerUserID := ""
-		if uid, err := appcontext.RequireUserIDFromContext(ctx); err == nil {
-			viewerUserID = uid
+		if id, ok := identity.FromContext(ctx); ok {
+			viewerUserID = id.UserID
 		}
 
 		var bubbles []convshared.PostBubble

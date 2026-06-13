@@ -13,7 +13,7 @@ import (
 	"context"
 	"log"
 
-	appcontext "github.com/erniealice/espyna-golang/appcontext"
+	"github.com/erniealice/espyna-golang/shared/identity"
 	conversationpb "github.com/erniealice/esqyma/pkg/schema/v1/domain/communication/conversation"
 	conversationpostpb "github.com/erniealice/esqyma/pkg/schema/v1/domain/communication/conversation_post"
 	pyeza "github.com/erniealice/pyeza-golang"
@@ -201,8 +201,8 @@ func (deps *Deps) loadBubbles(ctx context.Context, conversationID string) []conv
 		return nil
 	}
 	viewerUserID := ""
-	if uid, err := appcontext.RequireUserIDFromContext(ctx); err == nil {
-		viewerUserID = uid
+	if id, ok := identity.FromContext(ctx); ok {
+		viewerUserID = id.UserID
 	}
 	resp, err := deps.ListConversationPosts(ctx, &conversationpostpb.ListConversationPostsRequest{})
 	if err != nil {

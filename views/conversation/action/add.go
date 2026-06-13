@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	appcontext "github.com/erniealice/espyna-golang/appcontext"
+	"github.com/erniealice/espyna-golang/shared/identity"
 	conversationpb "github.com/erniealice/esqyma/pkg/schema/v1/domain/communication/conversation"
 	conversationpostpb "github.com/erniealice/esqyma/pkg/schema/v1/domain/communication/conversation_post"
 	"github.com/erniealice/pyeza-golang/view"
@@ -33,7 +33,7 @@ func NewAddAction(deps *Deps) view.View {
 		if viewCtx.Request.Method == http.MethodGet {
 			return view.OK("conversation-drawer-form", &convform.Data{
 				FormAction:        deps.Routes.AddURL,
-				WorkspaceID:       appcontext.GetWorkspaceIDFromContext(ctx),
+				WorkspaceID:       identity.Must(ctx).WorkspaceID,
 				IsClientPrincipal: isClientPrincipal,
 				ClientSearchURL:   deps.ClientSearchURL,
 				AssigneeSearchURL: deps.AssigneeSearchURL,
