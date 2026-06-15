@@ -1,3 +1,9 @@
+github.com/erniealice/espyna-golang v0.1.0-alpha h1:/1eWUBgt7OwX+iyGXl7FAna89w/C+fVlV5J02eEK1gA=
+github.com/erniealice/espyna-golang v0.1.0-alpha/go.mod h1:P9AR3h/H5rYRgBpDG7g9GqHtrtiSdxMFMJblW96euoo=
+github.com/erniealice/esqyma v0.1.0-alpha h1:2F01MDINqKjYHSSH3CEvoYr9ivigaUTpj1JxEH7dt6w=
+github.com/erniealice/esqyma v0.1.0-alpha/go.mod h1:EGvAB62C1/CP2TuxVqgRvNyBKwFU7M3Uybi2M5/b3C4=
+github.com/erniealice/pyeza-golang v0.1.0-alpha h1:jkPUpMekNIMmjb+MdGYvsssajaLFORWZgOstj9zTmNo=
+github.com/erniealice/pyeza-golang v0.1.0-alpha/go.mod h1:6nslydEfmjN+j8DBeU5AITmEbMemb+9qzg5BXOaoRFo=
 github.com/go-logr/logr v1.4.3 h1:CjnDlHq8ikf6E492q6eKboGOC0T8CDaOvkHCIg8idEI=
 github.com/go-logr/logr v1.4.3/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
 github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
