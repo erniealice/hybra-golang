@@ -161,6 +161,31 @@ func commonSafePolicy() Policy {
 	}
 }
 
+// docxOnlyContentTypes / docxOnlyExtensions pin a surface to Word .docx
+// documents only. .docx is a ZIP container, so http.DetectContentType sniffs it
+// as application/zip (or, on some platforms, octet-stream); the extension check
+// pins intent to .docx specifically.
+var docxOnlyContentTypes = []string{
+	"application/zip",
+	"application/x-zip-compressed",
+	"application/octet-stream",
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+var docxOnlyExtensions = []string{".docx"}
+
+// docxOnlyPolicy restricts a surface to a single Word .docx document — the
+// report-card template management surface (TB3): the operator uploads exactly
+// one .docx per template binding, so no images/PDFs/archives are accepted.
+func docxOnlyPolicy() Policy {
+	return Policy{
+		AllowedContentTypes: docxOnlyContentTypes,
+		AllowedExtensions:   docxOnlyExtensions,
+		MaxFileCount:        0, // per-binding count is governed by the binding surface, not here
+		MaxSize:             0, // inherit Config cap
+	}
+}
+
 // imagesOnlyPolicy restricts a surface to images.
 func imagesOnlyPolicy() Policy {
 	return Policy{
@@ -237,6 +262,13 @@ var DefaultRegistry = map[string]Policy{
 	"job_template":     commonSafePolicy(),
 	"outcome_criteria": commonSafePolicy(),
 	"task_outcome":     commonSafePolicy(),
+
+	// Report-card template management (TB3): the operator uploads exactly one
+	// Word .docx per template binding — pin the surface to .docx only (no
+	// images/PDFs/archives). Generic module key; the "Report Card Template"
+	// wording lives only in lyngua. Defense-in-depth for any attachment-path
+	// upload of a report-card template.
+	"report_card_template": docxOnlyPolicy(),
 
 	// --- fycha: accounting / assets (documents + images) ---
 	"asset":         commonSafePolicy(),
