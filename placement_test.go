@@ -37,7 +37,7 @@ import (
 var crossCutting = true // hybra is the §1a cross-cutting carve-out.
 // legacyAllow — EMPTY = STRICT (hybra has zero migration debt).
 var legacyAllow = map[string]string{}
-var charterViews = []string{"attachment", "auditlog", "conversation", "integration", "template"} // chartered concern groups
+var charterViews = []string{"attachment", "auditlog", "conversation", "integration", "omni_search", "template"} // chartered concern groups
 // subContexts: NAVIGATION-ONLY folders chartered directly under a single domain
 // (domain/<d>/<subcontext>/<entity>/). EMPTY for hybra — cross-cutting variant has
 // no domain/ subtree. Only entydad charters sub-contexts; this stays declared so

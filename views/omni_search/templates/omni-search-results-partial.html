@@ -1,0 +1,37 @@
+{{define "omni-search-results-partial"}}
+{{if .IsError}}
+  <div class="omni-search-error omni-search-state omni-search-state--error" data-testid="omni-search-empty" role="status">
+    <p class="omni-search-empty-message">{{.Labels.Error}}</p>
+  </div>
+{{else if .BelowMin}}
+  <p class="omni-search-hint" data-testid="omni-search-prompt">{{.Hint}}</p>
+{{else if not .HasResults}}
+  <div class="omni-search-empty omni-search-state omni-search-state--empty" data-testid="omni-search-empty" role="status">
+    <p class="omni-search-empty-title">{{.Labels.EmptyTitle}}</p>
+    <p class="omni-search-empty-message">{{.EmptyMessage}}</p>
+  </div>
+{{else}}
+  {{range .Sections}}
+  <section class="omni-search-section" data-testid="omni-search-section-{{.Key}}" role="group" aria-label="{{.Heading}}">
+    <h3 class="omni-search-section-title">{{.Heading}}</h3>
+    <ul class="omni-search-item-list">
+      {{range .Rows}}
+      <li class="omni-search-item-wrap">
+        {{if .Href}}
+        <a class="omni-search-item" data-testid="omni-search-item" role="option" href="{{.Href}}">
+          <span class="omni-search-item-label">{{.Label}}</span>
+          {{if .Sublabel}}<span class="omni-search-item-sublabel">{{.Sublabel}}</span>{{end}}
+        </a>
+        {{else}}
+        <span class="omni-search-item omni-search-item--nolink" data-testid="omni-search-item">
+          <span class="omni-search-item-label">{{.Label}}</span>
+          {{if .Sublabel}}<span class="omni-search-item-sublabel">{{.Sublabel}}</span>{{end}}
+        </span>
+        {{end}}
+      </li>
+      {{end}}
+    </ul>
+  </section>
+  {{end}}
+{{end}}
+{{end}}

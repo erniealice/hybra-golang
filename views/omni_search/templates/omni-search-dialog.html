@@ -1,0 +1,45 @@
+{{define "omni-search-dialog"}}
+{{/* Structure contract with pyeza omni-search.{js,css}: #omni-search-root (bare
+     container, never toggled) > .omni-search-overlay (hidden-toggled backdrop;
+     JS open()/close() flip [hidden]+.visible here) > .omni-search-panel (the
+     dialog). Class names below are the pyeza omni-search.css vocabulary. */}}
+<div class="omni-search-overlay" hidden>
+  <div class="omni-search-panel" data-testid="omni-search-dialog" role="dialog" aria-modal="true" aria-label="{{.Labels.Title}}">
+    <div class="omni-search-input-row">
+      <input
+        type="search"
+        id="omni-search-input"
+        name="q"
+        class="omni-search-input"
+        data-testid="omni-search-input"
+        placeholder="{{.Labels.Placeholder}}"
+        aria-label="{{.Labels.Placeholder}}"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        role="combobox"
+        aria-expanded="false"
+        aria-controls="omni-search-results"
+        aria-autocomplete="list"
+        hx-get="{{.Routes.ResultsURL}}"
+        hx-trigger="keyup changed delay:250ms, search"
+        hx-target="#omni-search-results"
+        hx-sync="this:replace"
+        hx-indicator="#omni-search-loading">
+      <span class="omni-search-kbd" aria-hidden="true"><kbd>{{.Labels.ShortcutHint}}</kbd></span>
+      <button type="button" class="omni-search-close" data-omni-search-close aria-label="{{.Labels.Close}}">
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </div>
+
+    <div id="omni-search-loading" class="omni-search-loading htmx-indicator" data-testid="omni-search-loading" role="status" aria-hidden="true">
+      <span class="omni-search-loading-text">{{.Labels.Loading}}</span>
+    </div>
+
+    <div id="omni-search-results" class="omni-search-results" data-testid="omni-search-results" role="listbox" aria-live="polite">
+      <p class="omni-search-hint" data-testid="omni-search-prompt">{{.Hint}}</p>
+    </div>
+  </div>
+</div>
+{{end}}
