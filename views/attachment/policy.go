@@ -270,6 +270,14 @@ var DefaultRegistry = map[string]Policy{
 	// upload of a report-card template.
 	"report_card_template": docxOnlyPolicy(),
 
+	// Grade-sheet (outcome-matrix) template management (20260720 Wave C): the
+	// sibling of report_card_template. The operator uploads exactly one Word .docx
+	// per grade-sheet template binding — pin the surface to .docx only (no
+	// images/PDFs/archives). Generic module key (Q6: module_key='outcome_matrix_template');
+	// the "Grade Sheet Template" wording lives only in lyngua. Defense-in-depth for
+	// any attachment-path upload of a grade-sheet template.
+	"outcome_matrix_template": docxOnlyPolicy(),
+
 	// --- fycha: accounting / assets (documents + images) ---
 	"asset":         commonSafePolicy(),
 	"journal_entry": commonSafePolicy(),
