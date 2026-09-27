@@ -263,15 +263,15 @@ var DefaultRegistry = map[string]Policy{
 	"outcome_criteria": commonSafePolicy(),
 	"task_outcome":     commonSafePolicy(),
 
-	// Report-card template management (TB3): the operator uploads exactly one
+	// Outcome summary template management (TB3): the operator uploads exactly one
 	// Word .docx per template binding — pin the surface to .docx only (no
 	// images/PDFs/archives). Generic module key; the "Report Card Template"
 	// wording lives only in lyngua. Defense-in-depth for any attachment-path
-	// upload of a report-card template.
-	"report_card_template": docxOnlyPolicy(),
+	// upload of an outcome summary template.
+	"outcome_summary_template": docxOnlyPolicy(),
 
 	// Grade-sheet (outcome-matrix) template management (20260720 Wave C): the
-	// sibling of report_card_template. The operator uploads exactly one Word .docx
+	// sibling of the outcome summary template. The operator uploads exactly one Word .docx
 	// per grade-sheet template binding — pin the surface to .docx only (no
 	// images/PDFs/archives). Generic module key (Q6: module_key='outcome_matrix_template');
 	// the "Grade Sheet Template" wording lives only in lyngua. Defense-in-depth for
